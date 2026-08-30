@@ -265,11 +265,13 @@ export function HTTP(defaultOptions = { baseURL: '' }) {
 
         events.onRequest(method, options);
 
-        // 原生 fetch 请求
-        const controller = new AbortController();
+        const headers = { ...options.headers };
+        if (!headers['User-Agent'] && !headers['user-agent']) {
+            headers['User-Agent'] = 'clash.meta';
+        }
         const fetchOptions = {
             method: method.toUpperCase(),
-            headers: options.headers || {},
+            headers,
             signal: controller.signal,
         };
 

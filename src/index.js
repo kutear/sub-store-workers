@@ -66,6 +66,10 @@ export default {
 
     async fetch(request, env, ctx) {
         try {
+            globalThis.__workerEnv = env;
+            globalThis.process = globalThis.process || {};
+            globalThis.process.env = env || {};
+
             const kvError = validateKVBinding(env);
             if (kvError) return kvError.response;
 
@@ -103,12 +107,13 @@ export default {
                         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
                     });
                 }
-                if (pathname === backendPath) {
-                    // 精确匹配前缀，重定向到带 / 的路径
+                if (pathname === backendPath || pathname === backendPath + '/') {
+                    // 访问管理入口，直接 302 跳转到官方前端并自动附带后端 API 地址
+                    const fullBackendUrl = new URL(backendPath, request.url).toString();
                     return new Response(null, {
                         status: 302,
                         headers: {
-                            'Location': new URL(backendPath + '/', request.url).toString(),
+                            'Location': `https://sub-store.vercel.app/?api=${encodeURIComponent(fullBackendUrl)}`,
                             'Access-Control-Allow-Origin': '*',
                         },
                     });
@@ -193,21 +198,19 @@ export default {
             }
 
             // 回写 KV + 确保推送完成
-            ctx.waitUntil(Promise.all([
-                $.persistCache(),
-                ...($.pendingPushes || []),
-            ]));
-            $.pendingPushes = [];
+            await $.persistCache();
+            if ($.pendingPushes && $.pendingPushes.length > 0) {
+                ctx.waitUntil(Promise.all($.pendingPushes));
+                $.pendingPushes = [];
+            }
 
             return response;
         } catch (e) {
             console.error(`Unhandled error: ${e.message}\n${e.stack}`);
             // 出错也尝试回写
-            ctx.waitUntil(Promise.all([
-                $.persistCache(),
-                ...($.pendingPushes || []),
-            ]));
-            $.pendingPushes = [];
+            try {
+                await $.persistCache();
+            } catch (_) {}
             return new Response(
                 JSON.stringify({
                     status: 'failed',
