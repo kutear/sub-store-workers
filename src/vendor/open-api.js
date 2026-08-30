@@ -262,9 +262,9 @@ export function HTTP(defaultOptions = { baseURL: '' }) {
             },
             ...options.events,
         };
-
         events.onRequest(method, options);
 
+        const controller = new AbortController();
         const headers = { ...options.headers };
         if (!headers['User-Agent'] && !headers['user-agent']) {
             headers['User-Agent'] = 'clash.meta';
